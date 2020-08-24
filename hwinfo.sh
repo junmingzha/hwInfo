@@ -1,5 +1,5 @@
 #!/bin/bash
-#Server Hardware Configuration Collector
+#Server Hardware Information Collector
 #For RHEL/CentOS
 #Author   : xinchen.luan@transwarp.io
 #Date     : 08/04/2020
@@ -22,69 +22,28 @@ getOSinf(){
     [ -f /etc/lsb-release ] && awk -F'[="]+' '/DESCRIPTION/{print $2}' /etc/lsb-release && return
 }
 
-#Check the components
-chk_lspci(){
-    lspci=`whereis lspci | awk -F ":" '{print $2}'`
-    if [ ${#lspci} -eq 0 ];then
-        echo -e "${RED} [FAILED] lspci is not ready. trying to install....${PLAIN}"
-        install_lspci
+#Check the environment
+chk_env(){
+    soft=`whereis $1 | awk -F ":" '{print $2}'`
+    if [ ${#soft} -eq 0 ];then
+        echo -e "${RED} [FAILED] $1 is not ready. trying to install....${PLAIN}"
+        install_env $2
     else
-        echo -e "${GREEN} [OK] lspci is ready.${PLAIN}"
+        echo -e "${GREEN} [OK] $1 is ready.${PLAIN}"
     fi
 }
 
-chk_dmi(){
-    dmi=`whereis dmidecode | awk -F ":" '{print $2}'`
-    if [ ${#dmi} -eq 0 ];then
-        echo -e "${RED} [FAILED] dmidecode is not ready. trying to install....${PLAIN}"
-        install_dmi
-    else
-        echo -e "${GREEN} [OK] dmidecode is ready.${PLAIN}"
-    fi
-}
-
-chk_smctl(){
-    smctl=`whereis smartctl | awk -F ":" '{print $2}'`
-    if [ ${#smctl} -eq 0 ];then
-        echo -e "${RED} [FAILED] smartctl is not ready. trying to install....${PLAIN}"
-        install_smctl
-    else
-        echo -e "${GREEN} [OK] smartctl is ready.${PLAIN}"
-    fi
-}
-
-#Install components
-install_lspci(){
-    yum install pciutils -y -q
+#Check the environment
+install_env(){
+    yum install $1 -y -q
     if [ $? -eq 0 ];then
-        echo -e "${GREEN} [OK] lspci is ready.${PLAIN}"
+        echo -e "${GREEN} [OK] $1 is ready.${PLAIN}"
     else
-        echo -e "${RED} [FAILED] lspci installation failed, please try to install manually.${PLAIN}"
+        echo -e "${RED} [FAILED] $1 installation failed, please try to install manually.${PLAIN}"
         exit 1
     fi
 }
 
-install_dmi(){
-    yum install dmidecode -y -q
-    if [ $? -eq 0 ];then
-        echo -e "${GREEN} [OK] dmidecode is ready.${PLAIN}"
-    else
-        echo -e "${RED} [FAILED] dmidecode installation failed, please try to install manually.${PLAIN}"
-        exit 1
-    fi
-}
-
-install_smctl(){
-    yum install smartmontools -y -q
-    if [ $? -eq 0 ];then
-        echo -e "${GREEN} [OK] smartctl is ready.${PLAIN}"
-    else
-        echo -e "${RED} [FAILED] smartctl installation failed, please try to install manually.${PLAIN}"
-        exit 1
-    fi
-}
-
-#System Information collection
 getSYSinf(){
     #System Manufacturer
     SYSmaf=`dmidecode |grep -A16 "System Information$" |grep "Manufacturer"|head -n 1 |awk -F': ' '{print $2}'`
@@ -102,9 +61,8 @@ getSYSinf(){
     SYSip=`ip addr | grep 'state UP' -A2 | grep '172.[12]6' | head -n 1 | awk '{print $2}' | cut -f1 -d '/'`
 }
 
-#CPU Information collection
 getCPUinf(){
-    #CPU Model Name (无法兼容CPU混插情况，待增加判断)
+    #CPU Model Name (无法兼容CPU混插情况)
     CPUnm=`cat /proc/cpuinfo | grep "model name" | uniq |awk -F': ' '{print $2}'`
     #Physical CPU Count
     CPUcut=`cat /proc/cpuinfo| grep "physical id"| sort| uniq| wc -l`
@@ -114,7 +72,6 @@ getCPUinf(){
     CPUproc=`cat /proc/cpuinfo| grep "processor"| wc -l`
 }
 
-#Memory Information collection
 getMEMinf(){
     #Memory Total Size 
     MEMtotal=`dmidecode -t 17 | grep  "Size:" | grep -v "No Module Installed" | awk '{sum+=$2}END{print sum,$3}'`
@@ -149,10 +106,12 @@ getDISKinf(){
     if [ ${megaraid} -eq 0 ];then
         smartctl="smartctl -i"
         DISKlist=$(smartctl --scan | grep -v "megaraid,*" |awk -F ' ' '{print $1}')
+        DISKcut=$(smartctl --scan | grep -v "megaraid,*" |awk -F ' ' '{print $1}'|wc -l)
         dev=""
     else
         smartctl="smartctl -i -d"
         DISKlist=$(smartctl --scan | grep "megaraid,*" |awk -F ' ' '{print $3}')
+        DISKcut=$(smartctl --scan | grep "megaraid,*" |awk -F ' ' '{print $1}'|wc -l)
         dev="/dev/sda"
     fi
     #Get Disk Information
@@ -166,7 +125,6 @@ getDISKinf(){
     done
 }
 
-#Ethernet Device Information collection
 getETHinf(){
     #Ethernet Device Count
     ETHcut=`lspci |grep -i ethernet |wc -l`
@@ -189,6 +147,15 @@ MEMitem(){
     done
 }
 
+ETHitem(){
+    m1=0
+    while [ $m1 -lt $ethslot ]
+    do
+        echo -e "Device$m1 Model Name : ${ETHnm[$m1]}"
+        ((m1++))
+    done
+}
+
 DISKitem(){
     m2=0
     while [ $m2 -lt $dslot ]
@@ -197,15 +164,6 @@ DISKitem(){
         echo -e "DISK$m2 Size         : ${DISKsize[$m2]}"
         echo -e "DISK$m2 Type         : ${DISKtype[$m2]}"
         ((m2++))
-    done
-}
-
-ETHitem(){
-    m1=0
-    while [ $m1 -lt $ethslot ]
-    do
-        echo -e "Device$m1 Model Name : ${ETHnm[$m1]}"
-        ((m1++))
     done
 }
 
@@ -230,6 +188,7 @@ showData(){
     echo -e "${GREEN}Uesd Slot Count${PLAIN}    : ${MEMsltuse}"
     MEMitem
     echo "---------------------------DISK INFO-----------------------------"
+    echo -e "${GREEN}DISK Count${PLAIN}         : ${DISKcut}"
     DISKitem
     echo "--------------------------EthDeivce INFO-------------------------"
     echo -e "${GREEN}Eth Device Count${PLAIN}   : ${ETHcut}"
@@ -238,9 +197,9 @@ showData(){
 }
 
 getALLinf(){
-    chk_lspci
-    chk_dmi
-    chk_smctl
+    chk_env lspci pciutils
+    chk_env dmidecode dmidecode
+    chk_env smartctl smartmontools
     getSYSinf
     getCPUinf
     getMEMinf
@@ -252,7 +211,7 @@ syncData(){
     mem_item=$( MEMitem )
     disk_item=$( DISKitem )
     eth_item=$( ETHitem )
-    curl http://172.16.2.33:8080/hwinfo -X POST -d "sys_maf=${SYSmaf}&sys_mod=${SYSmod}&sys_sn=${SYSsn}&sys_nm=${SYSnm}&sys_os=${SYSos}&sys_kn=${SYSkn}&sys_ip=${SYSip}&cpu_mod=${CPUnm}&cpu_num=${CPUcut}&cpu_core=${CPUcore}&cpu_thr=${CPUproc}&mem_type=${MEMtype}&mem_size=${MEMtotal}&mem_slot=${MEMsltcut}&mem_used=${MEMsltuse}&mem_item=${mem_item}&disk_item=${disk_item}&eth_count=${ETHcut}&eth_item=${eth_item}"
+    curl http://172.16.2.33:8080/hwinfo -X POST -d "sys_maf=${SYSmaf}&sys_mod=${SYSmod}&sys_sn=${SYSsn}&sys_nm=${SYSnm}&sys_os=${SYSos}&sys_kn=${SYSkn}&sys_ip=${SYSip}&cpu_mod=${CPUnm}&cpu_num=${CPUcut}&cpu_core=${CPUcore}&cpu_thr=${CPUproc}&mem_type=${MEMtype}&mem_size=${MEMtotal}&mem_slot=${MEMsltcut}&mem_used=${MEMsltuse}&mem_item=${mem_item}&disk_count=${DISKcut}&disk_item=${disk_item}&eth_count=${ETHcut}&eth_item=${eth_item}"
     return
 }
 
