@@ -15,6 +15,13 @@ RED='\033[0;31m'
 PLAIN='\033[0m'
 echo "-------------------------Ready To Collect------------------------"
 
+#Check the OS-Version
+getOSinf(){
+    [ -f /etc/redhat-release ] && awk '{print ($1,$3~/^[0-9]/?$3:$4)}' /etc/redhat-release && return
+    [ -f /etc/os-release ] && awk -F'[= "]' '/PRETTY_NAME/{print $3,$4,$5}' /etc/os-release && return
+    [ -f /etc/lsb-release ] && awk -F'[="]+' '/DESCRIPTION/{print $2}' /etc/lsb-release && return
+}
+
 #Check the components
 chk_lspci(){
     lspci=`whereis lspci | awk -F ":" '{print $2}'`
@@ -88,20 +95,11 @@ getSYSinf(){
     #Hostname
     SYSnm=`hostname -f`
     #OS Version
-    SYSos=`cat /etc/system-release`
+    SYSos=$( getOSinf )
     #Kernel Version
     SYSkn=`uname -r`
     #System IP Address
     SYSip=`ip addr | grep 'state UP' -A2 | grep '172.[12]6' | head -n 1 | awk '{print $2}' | cut -f1 -d '/'`
-
-    echo "---------------------------System INFO---------------------------"
-    echo -e "${GREEN}System Manufacturer${PLAIN}: ${SYSmaf}"
-    echo -e "${GREEN}System Model Name${PLAIN}  : ${SYSmod}"
-    echo -e "${GREEN}Serial Number${PLAIN}      : ${SYSsn}"
-    echo -e "${GREEN}Hostname${PLAIN}           : ${SYSnm}"
-    echo -e "${GREEN}System release${PLAIN}     : ${SYSos}"
-    echo -e "${GREEN}Kernel release${PLAIN}     : ${SYSkn}"
-    echo -e "${GREEN}IP Address${PLAIN}         : ${SYSip}"
 }
 
 #CPU Information collection
@@ -114,12 +112,6 @@ getCPUinf(){
     CPUcore=`cat /proc/cpuinfo | grep "core id" | sort | uniq | wc -l`
     #Threads Count
     CPUproc=`cat /proc/cpuinfo| grep "processor"| wc -l`
-
-    echo "-----------------------------CPU INFO----------------------------"
-    echo -e "${GREEN}CPU Model Name${PLAIN}     : ${CPUnm}"
-    echo -e "${GREEN}Physical CPU Count${PLAIN} : ${CPUcut}"
-    echo -e "${GREEN}Cores (Per CPU)${PLAIN}    : ${CPUcore}"
-    echo -e "${GREEN}Threads Count${PLAIN}      : ${CPUproc}"
 }
 
 #Memory Information collection
@@ -133,77 +125,45 @@ getMEMinf(){
     #Memory Slot Type
     MEMtype=`dmidecode -t 17 | grep "Type:" | uniq |awk -F': ' '{print $2}'`
     #Memory Size (Per Slot)
+    #Initialize the memory slot variable "slotsize" for MemorySize
     slotsize=0
-    for i in `dmidecode -t 17 | grep  "Size:" | grep -v "Installed" |awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
+    for msize in `dmidecode -t 17 | grep  "Size:" | grep -v "Installed" |awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
     do
-        MEMsize[$slotsize]=$i
+        MEMsize[$slotsize]=$msize
         ((slotsize++))
     done
     #Memory Speed (Per Slot,Standard Memory Speed , not Clock Speed)
+    #Initialize the memory slot variable "slotspd" for MemorySpeed
     slotspd=0
-    for s in `dmidecode -t 17 | grep "Speed:" |grep -v "Unknown"|grep -v "Clock Speed:"|awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
+    for mspd in `dmidecode -t 17 | grep "Speed:" |grep -v "Unknown"|grep -v "Clock Speed:"|awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
     do
-        MEMspd[$slotspd]=$s
+        MEMspd[$slotspd]=$mspd
         ((slotspd++))
-    done
-
-    echo "---------------------------Memory INFO---------------------------"
-    echo -e "${GREEN}Memory Type${PLAIN}        : ${MEMtype}"    
-    echo -e "${GREEN}Memory Total Size${PLAIN}  : ${MEMtotal}"
-    echo -e "${GREEN}Memory Slot Count${PLAIN}  : ${MEMsltcut}"
-    echo -e "${GREEN}Uesd Slot Count${PLAIN}    : ${MEMsltuse}"
-
-    #Echo Memory Size & Speed
-    m=0
-    while [ $m -lt $slotsize ]
-    do
-        echo -e "${GREEN}Slot$m Size${PLAIN}         : ${MEMsize[$m]}"
-        echo -e "${GREEN}Slot$m Speed${PLAIN}        : ${MEMspd[$m]}"
-        ((m++))
     done
 }
 
-#DISK Information collection
+#DISK Information collection (Cannot support NVME devices)
 getDISKinf(){
     #If RAID
     megaraid=`smartctl --scan | grep megaraid_disk | wc -l`
     if [ ${megaraid} -eq 0 ];then
-        isRaid="false"
-        DISKlist=`smartctl --scan | grep -v "megaraid,*" |awk -F ' ' '{print $1}'`
+        smartctl="smartctl -i"
+        DISKlist=$(smartctl --scan | grep -v "megaraid,*" |awk -F ' ' '{print $1}')
+        dev=""
     else
-        isRaid="true"
-        DISKlist=`smartctl --scan | grep "megaraid,*" |awk -F ' ' '{print $3}'`
+        smartctl="smartctl -i -d"
+        DISKlist=$(smartctl --scan | grep "megaraid,*" |awk -F ' ' '{print $3}')
+        dev="/dev/sda"
     fi
-
-    echo "---------------------------DISK INFO-------------------------"
+    #Get Disk Information
     dslot=0
-    if [ ${isRaid} == "true" ];then
-        for d in "${DISKlist[@]}"
-        do
-            DISKsize[$dslot]=`smartctl -i -d $d /dev/sda | grep "User Capacity:" | grep -o '\[.*\]' | sed 's/[][]*//g'`
-            DISKmd[$dslot]=`smartctl -i -d $d /dev/sda |grep "Product:" | awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
-            DISKtype[$dslot]=`smartctl -i -d $d /dev/sda |grep "Form Factor:" | awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
-            ((dslot++))
-        done
-    else
-        for d in "${DISKlist[@]}"
-        do
-            DISKsize[$dslot]=`smartctl -i $d | grep "User Capacity:" | grep -o '\[.*\]' | sed 's/[][]*//g'`
-            DISKmd[$dslot]=`smartctl -i $d |grep "Product:" | awk -F':' '{print $2}'|sed 's/[ ][ ]*//g'`
-            DISKtype[$dslot]=`smartctl -i $d |grep "Form Factor:" | awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
-            ((dslot++))
-        done
-    fi
-
-    m2=0
-    while [ $m2 -lt $dslot ]
+    for disk in `echo $DISKlist`
     do
-        echo -e "${GREEN}DISK$m2 Size${PLAIN} : ${DISKsize[$m2]}"
-        echo -e "${GREEN}DISK$m2 Model Name${PLAIN} : ${DISKmd[$m2]}"
-        echo -e "${GREEN}DISK$m2 Type${PLAIN} : ${DISKtype[$m2]}"
-        ((m2++))
+        DISKsize[$dslot]=`$smartctl $disk $dev | grep "User Capacity:" | grep -o '\[.*\]' | sed 's/[][]*//g'`
+        DISKmd[$dslot]=`$smartctl $disk $dev |grep "Product:" | awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
+        DISKtype[$dslot]=`$smartctl $disk $dev |grep "Form Factor:" | awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
+        ((dslot++))
     done
-    #Disk Count (SATA , SAS or NVMe Device)
 }
 
 #Ethernet Device Information collection
@@ -212,23 +172,72 @@ getETHinf(){
     ETHcut=`lspci |grep -i ethernet |wc -l`
     #Ethernet Device Model Name
     ethslot=0
-    for e in `lspci |grep -i ethernet |awk -F': ' '{print $2}'|sed 's/[ ][ ]*/_/g'`
+    for eth in `lspci |grep -i ethernet |awk -F': ' '{print $2}'|sed 's/[ ][ ]*/_/g'`
     do
-        ETHnm[$ethslot]=$e
+        ETHnm[$ethslot]=$eth
         ((ethslot++))
     done
+}
 
-    echo "--------------------------EthDeivce INFO-------------------------"
-    echo -e "${GREEN}Eth Device Count${PLAIN}   : ${ETHcut}"
+MEMitem(){
+    m=0
+    while [ $m -lt $slotsize ]
+    do
+        echo -e "Slot$m Size         : ${MEMsize[$m]}"
+        echo -e "Slot$m Speed        : ${MEMspd[$m]}"
+        ((m++))
+    done
+}
+
+DISKitem(){
+    m2=0
+    while [ $m2 -lt $dslot ]
+    do
+        echo -e "DISK$m2 Model Name   : ${DISKmd[$m2]}"
+        echo -e "DISK$m2 Size         : ${DISKsize[$m2]}"
+        echo -e "DISK$m2 Type         : ${DISKtype[$m2]}"
+        ((m2++))
+    done
+}
+
+ETHitem(){
     m1=0
     while [ $m1 -lt $ethslot ]
     do
-        echo -e "${GREEN}Device$m1 Model Name${PLAIN} : ${ETHnm[$m1]}"
+        echo -e "Device$m1 Model Name : ${ETHnm[$m1]}"
         ((m1++))
     done
 }
 
 showData(){
+    echo "---------------------------System INFO---------------------------"
+    echo -e "${GREEN}System Manufacturer${PLAIN}: ${SYSmaf}"
+    echo -e "${GREEN}System Model Name${PLAIN}  : ${SYSmod}"
+    echo -e "${GREEN}Serial Number${PLAIN}      : ${SYSsn}"
+    echo -e "${GREEN}Hostname${PLAIN}           : ${SYSnm}"
+    echo -e "${GREEN}System release${PLAIN}     : ${SYSos}"
+    echo -e "${GREEN}Kernel release${PLAIN}     : ${SYSkn}"
+    echo -e "${GREEN}IP Address${PLAIN}         : ${SYSip}"
+    echo "-----------------------------CPU INFO----------------------------"
+    echo -e "${GREEN}CPU Model Name${PLAIN}     : ${CPUnm}"
+    echo -e "${GREEN}Physical CPU Count${PLAIN} : ${CPUcut}"
+    echo -e "${GREEN}Cores (Per CPU)${PLAIN}    : ${CPUcore}"
+    echo -e "${GREEN}Threads Count${PLAIN}      : ${CPUproc}"
+    echo "---------------------------Memory INFO---------------------------"
+    echo -e "${GREEN}Memory Type${PLAIN}        : ${MEMtype}"    
+    echo -e "${GREEN}Memory Total Size${PLAIN}  : ${MEMtotal}"
+    echo -e "${GREEN}Memory Slot Count${PLAIN}  : ${MEMsltcut}"
+    echo -e "${GREEN}Uesd Slot Count${PLAIN}    : ${MEMsltuse}"
+    MEMitem
+    echo "---------------------------DISK INFO-----------------------------"
+    DISKitem
+    echo "--------------------------EthDeivce INFO-------------------------"
+    echo -e "${GREEN}Eth Device Count${PLAIN}   : ${ETHcut}"
+    ETHitem
+    echo "-------------------------------END-------------------------------"
+}
+
+getALLinf(){
     chk_lspci
     chk_dmi
     chk_smctl
@@ -239,7 +248,15 @@ showData(){
     getDISKinf
 }
 
-showData
+syncData(){
+    mem_item=$( MEMitem )
+    disk_item=$( DISKitem )
+    eth_item=$( ETHitem )
+    curl http://172.16.2.33:8080/hwinfo -X POST -d "sys_maf=${SYSmaf}&sys_mod=${SYSmod}&sys_sn=${SYSsn}&sys_nm=${SYSnm}&sys_os=${SYSos}&sys_kn=${SYSkn}&sys_ip=${SYSip}&cpu_mod=${CPUnm}&cpu_num=${CPUcut}&cpu_core=${CPUcore}&cpu_thr=${CPUproc}&mem_type=${MEMtype}&mem_size=${MEMtotal}&mem_slot=${MEMsltcut}&mem_used=${MEMsltuse}&mem_item=${mem_item}&disk_item=${disk_item}&eth_count=${ETHcut}&eth_item=${eth_item}"
+    return
+}
 
-echo "-----------------------------------------------------------------"
+getALLinf
+showData
+syncData
 echo -e "${RED}All done. Exit.${PLAIN}"
