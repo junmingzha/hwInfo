@@ -1,6 +1,6 @@
 #!/bin/bash
 #Server Hardware Information Collector
-#For RHEL/CentOS
+#For RHEL/CentOS/Ubuntu
 #Author   : xinchen.luan@transwarp.io
 #Date     : 08/04/2020
 
@@ -40,7 +40,7 @@ install_env(){
         yum install $1 -y -q
         ;;
     Ubuntu*|UOS*|Kylin*)
-        apt-get install -q -y $1
+        apt-get install -y $1 > /dev/null
         ;;
     *)
         echo -e "${RED} [FAILED] Unknown System! $1 installation failed, please try to install manually.${PLAIN}"
@@ -72,7 +72,7 @@ getSYSinf(){
 }
 
 getCPUinf(){
-    #CPU Model Name (无法兼容CPU混插情况)
+    #CPU Model Name
     CPUnm=`cat /proc/cpuinfo | grep "model name" | uniq |awk -F': ' '{print $2}'`
     #Physical CPU Count
     CPUcut=`cat /proc/cpuinfo| grep "physical id"| sort| uniq| wc -l`
