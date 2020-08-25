@@ -6,7 +6,7 @@
 
 if [ $UID != 0 ]; then
     echo "Error: You must be root to run this script!"
-    exit 1
+    return
 fi
 
 #Output formatting
@@ -15,10 +15,10 @@ RED='\033[0;31m'
 PLAIN='\033[0m'
 echo "-------------------------Ready To Collect------------------------"
 
-#Check the OS-Version
+#Get the OS-Version
 getOSinf(){
-    [ -f /etc/redhat-release ] && awk '{print ($1,$3~/^[0-9]/?$3:$4)}' /etc/redhat-release && return
     [ -f /etc/os-release ] && awk -F'[= "]' '/PRETTY_NAME/{print $3,$4,$5}' /etc/os-release && return
+    [ -f /etc/redhat-release ] && awk '{print ($1,$3~/^[0-9]/?$3:$4)}' /etc/redhat-release && return
     [ -f /etc/lsb-release ] && awk -F'[="]+' '/DESCRIPTION/{print $2}' /etc/lsb-release && return
 }
 
@@ -33,14 +33,24 @@ chk_env(){
     fi
 }
 
-#Check the environment
+#Install the environment
 install_env(){
-    yum install $1 -y -q
+    case $( getOSinf ) in
+    CentOS*|Redhat*|NeoKylin*)
+        yum install $1 -y -q
+        ;;
+    Ubuntu*|UOS*|Kylin*)
+        apt-get install -q -y $1
+        ;;
+    *)
+        echo -e "${RED} [FAILED] Unknown System! $1 installation failed, please try to install manually.${PLAIN}"
+        return
+    esac
     if [ $? -eq 0 ];then
         echo -e "${GREEN} [OK] $1 is ready.${PLAIN}"
     else
         echo -e "${RED} [FAILED] $1 installation failed, please try to install manually.${PLAIN}"
-        exit 1
+        return
     fi
 }
 
@@ -80,7 +90,7 @@ getMEMinf(){
     #Uesd Memory Slot Count
     MEMsltuse=`dmidecode -t 17 | grep "Size:" | grep -v "No Module Installed"|wc -l`
     #Memory Slot Type
-    MEMtype=`dmidecode -t 17 | grep "Type:" | uniq |awk -F': ' '{print $2}'`
+    MEMtype=`dmidecode -t 17 | grep "Type:" | grep -v "Unknown" |uniq |awk -F': ' '{print $2}'`
     #Memory Size (Per Slot)
     #Initialize the memory slot variable "slotsize" for MemorySize
     slotsize=0
@@ -167,6 +177,17 @@ DISKitem(){
     done
 }
 
+getALLinf(){
+    chk_env lspci pciutils
+    chk_env dmidecode dmidecode
+    chk_env smartctl smartmontools
+    getSYSinf
+    getCPUinf
+    getMEMinf
+    getETHinf
+    getDISKinf
+}
+
 showData(){
     echo "---------------------------System INFO---------------------------"
     echo -e "${GREEN}System Manufacturer${PLAIN}: ${SYSmaf}"
@@ -196,26 +217,15 @@ showData(){
     echo "-------------------------------END-------------------------------"
 }
 
-getALLinf(){
-    chk_env lspci pciutils
-    chk_env dmidecode dmidecode
-    chk_env smartctl smartmontools
-    getSYSinf
-    getCPUinf
-    getMEMinf
-    getETHinf
-    getDISKinf
-}
-
 syncData(){
     mem_item=$( MEMitem )
     disk_item=$( DISKitem )
     eth_item=$( ETHitem )
     curl http://172.16.2.33:8080/hwinfo -X POST -d "sys_maf=${SYSmaf}&sys_mod=${SYSmod}&sys_sn=${SYSsn}&sys_nm=${SYSnm}&sys_os=${SYSos}&sys_kn=${SYSkn}&sys_ip=${SYSip}&cpu_mod=${CPUnm}&cpu_num=${CPUcut}&cpu_core=${CPUcore}&cpu_thr=${CPUproc}&mem_type=${MEMtype}&mem_size=${MEMtotal}&mem_slot=${MEMsltcut}&mem_used=${MEMsltuse}&mem_item=${mem_item}&disk_count=${DISKcut}&disk_item=${disk_item}&eth_count=${ETHcut}&eth_item=${eth_item}"
-    return
+    return 1
 }
 
 getALLinf
 showData
-syncData
+#syncData
 echo -e "${RED}All done. Exit.${PLAIN}"
