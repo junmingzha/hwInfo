@@ -33,7 +33,7 @@ chk_env(){
     fi
 }
 
-#Install the environment
+#Install the components
 install_env(){
     case $( getOSinf ) in
     CentOS*|Redhat*|NeoKylin*)
@@ -124,13 +124,21 @@ getDISKinf(){
         DISKcut=$(smartctl --scan | grep "megaraid,*" |awk -F ' ' '{print $1}'|wc -l)
         dev="/dev/sda"
     fi
+
     #Get Disk Information
     dslot=0
     for disk in `echo $DISKlist`
     do
-        DISKsize[$dslot]=`$smartctl $disk $dev | grep "User Capacity:" | grep -o '\[.*\]' | sed 's/[][]*//g'`
-        DISKmd[$dslot]=`$smartctl $disk $dev |grep "Product:" | awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
-        DISKtype[$dslot]=`$smartctl $disk $dev |grep "Form Factor:" | awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
+        #If SATA
+        ifsata=`$smartctl $disk $dev |grep -i "SATA" |wc -l`
+        if [ ${ifsata} -eq 0 ];then
+            keyword="Product:"
+        else
+            keyword="Device Model:"
+        fi
+        DISKsize[$dslot]=`$smartctl $disk $dev | grep -i "User Capacity:" | grep -o '\[.*\]' | sed 's/[][]*//g'`
+        DISKmd[$dslot]=`$smartctl $disk $dev |grep -i "${keyword}" | awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
+        DISKtype[$dslot]=`$smartctl $disk $dev |grep -i "Form Factor:" | awk -F': ' '{print $2}'|sed 's/[ ][ ]*//g'`
         ((dslot++))
     done
 }
@@ -214,18 +222,18 @@ showData(){
     echo "--------------------------EthDeivce INFO-------------------------"
     echo -e "${GREEN}Eth Device Count${PLAIN}   : ${ETHcut}"
     ETHitem
-    echo "-------------------------------END-------------------------------"
 }
 
 syncData(){
     mem_item=$( MEMitem )
     disk_item=$( DISKitem )
     eth_item=$( ETHitem )
-    curl http://172.16.2.33:8080/hwinfo -X POST -d "sys_maf=${SYSmaf}&sys_mod=${SYSmod}&sys_sn=${SYSsn}&sys_nm=${SYSnm}&sys_os=${SYSos}&sys_kn=${SYSkn}&sys_ip=${SYSip}&cpu_mod=${CPUnm}&cpu_num=${CPUcut}&cpu_core=${CPUcore}&cpu_thr=${CPUproc}&mem_type=${MEMtype}&mem_size=${MEMtotal}&mem_slot=${MEMsltcut}&mem_used=${MEMsltuse}&mem_item=${mem_item}&disk_count=${DISKcut}&disk_item=${disk_item}&eth_count=${ETHcut}&eth_item=${eth_item}"
-    return 1
+    echo "----------------------------Uploading----------------------------"
+    curl http://172.16.2.33:8080/hwinfo -X POST -d "sys_maf=${SYSmaf}&sys_mod=${SYSmod}&sys_sn=${SYSsn}&sys_nm=${SYSnm}&sys_os=${SYSos}&sys_kn=${SYSkn}&sys_ip=${SYSip}&cpu_mod=${CPUnm}&cpu_num=${CPUcut}&cpu_core=${CPUcore}&cpu_thr=${CPUproc}&mem_type=${MEMtype}&mem_size=${MEMtotal}&mem_slot=${MEMsltcut}&mem_used=${MEMsltuse}&mem_item=${mem_item}&disk_count=${DISKcut}&disk_item=${disk_item}&eth_count=${ETHcut}&eth_item=${eth_item}" > /dev/null
+    echo "-------------------------------END-------------------------------"
 }
 
 getALLinf
 showData
-#syncData
-echo -e "${RED}All done. Exit.${PLAIN}"
+syncData
+echo -e "${GREEN}All done. Exit.${PLAIN}"
