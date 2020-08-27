@@ -231,9 +231,9 @@ syncData(){
     echo "----------------------------Uploading----------------------------"
     curl http://172.16.2.33:8080/hwinfo -X POST -d "sys_maf=${SYSmaf}&sys_mod=${SYSmod}&sys_sn=${SYSsn}&sys_nm=${SYSnm}&sys_os=${SYSos}&sys_kn=${SYSkn}&sys_ip=${SYSip}&cpu_mod=${CPUnm}&cpu_num=${CPUcut}&cpu_core=${CPUcore}&cpu_thr=${CPUproc}&mem_type=${MEMtype}&mem_size=${MEMtotal}&mem_slot=${MEMsltcut}&mem_used=${MEMsltuse}&mem_item=${mem_item}&disk_count=${DISKcut}&disk_item=${disk_item}&eth_count=${ETHcut}&eth_item=${eth_item}" > /dev/null
     echo "-------------------------------END-------------------------------"
+    echo -e "${GREEN}All done. Exit.${PLAIN}"
 }
 
 getALLinf
 showData
 syncData
-echo -e "${GREEN}All done. Exit.${PLAIN}"
