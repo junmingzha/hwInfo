@@ -15,3 +15,30 @@
 
 #### 用到的依赖
 python2.7、webpy、mysql
+
+##### 数据库字段说明
+
+| 字段名           | 数据类型     | 注释                   |
+| ---------------- | ------------ | ---------------------- |
+| id               | int          | id                     |
+| sys_manufacturer | varchar(100) | 服务器厂商             |
+| sys_model        | varchar(100) | 服务器型号             |
+| sys_sn           | varchar(100) | 系统序列号             |
+| sys_hostname     | varchar(100) | Hostname               |
+| sys_os           | varchar(100) | 操作系统               |
+| sys_kernel       | varchar(100) | 内核版本               |
+| sys_ip           | varchar(100) | 内网ip（上海机房地址） |
+| cpu_model        | varchar(100) | CPU型号                |
+| cpu_number       | varchar(100) | CPU数量                |
+| cpu_cores        | varchar(100) | 每CPU核心数            |
+| cpu_threads      | varchar(100) | 线程总数               |
+| mem_type         | varchar(100) | 内存类型               |
+| mem_size_total   | varchar(100) | 内存总量               |
+| mem_slot_count   | varchar(100) | 内存插槽计数           |
+| mem_uesd_slot    | varchar(100) | 已用内存插槽计数       |
+| mem_item         | longtext     | 内存明细               |
+| disk_count       | varchar(100) | 硬盘计数               |
+| disk_item        | longtext     | 硬盘明细               |
+| eth_device_count | varchar(100) | 网卡计数               |
+| eth_device_item  | longtext     | 网卡明细               |
+| datetime         | datetime     | 信息收集时间戳         |
