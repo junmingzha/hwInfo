@@ -1,0 +1,14 @@
+[Unit]
+Description=hwinfo
+After=network.service
+
+[Service]
+User=root
+Group=root
+Type=simple
+ExecStart=/usr/bin/python /root/webpy/hwinfo.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+
