@@ -90,7 +90,7 @@ getMEMinf(){
     #Uesd Memory Slot Count
     MEMsltuse=`dmidecode -t 17 | grep "Size:" | grep -v "No Module Installed"|wc -l`
     #Memory Slot Type
-    MEMtype=`dmidecode -t 17 | grep "Type:" | grep -v "Unknown" |uniq |awk -F': ' '{print $2}'`
+    MEMtype=`dmidecode -t 17 | grep "Type: D[DR]*" | uniq |awk -F': ' '{print $2}'`
     #Memory Size (Per Slot)
     #Initialize the memory slot variable "slotsize" for MemorySize
     slotsize=0
